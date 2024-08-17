@@ -1,102 +1,197 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
+// import { PrismaClient } from "@prisma/client"
+// import { parser } from "./parser";
+// import { JsonObject } from "@prisma/client/runtime/library";
+// import { sendGmail } from "./gmail";
+// import Redis from "ioredis";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+//   const prismaClient = new PrismaClient();
+//   type RedisMessage = [string, string[]]; // A message ID and an array of fields
+// type RedisStream = [string, RedisMessage[]]; // Stream key and messages
+// // Initialize Redis
+// const redis = new Redis({
+//   host: 'redis-18656.c321.us-east-1-2.ec2.redns.redis-cloud.com',  // Replace with your Redis host
+//   port: 18656,         // Default Redis port
+//   password: 'LEKR3q6SCkNxgjPa6adjScmBb44qrjeu',       // Add Redis password if necessary
+// });
+// // Subscribe to the "zap" channel
+// const streamKey = "zap-stream" ;
+// const groupName = "zap-consumers"
+// const consumerName = 'consumer-1';
+//   async function main() {
+//     try {
+//       await redis.xgroup('CREATE', streamKey, groupName, '$', 'MKSTREAM');
+//     } catch (e) {
+//       console.log('Consumer group already exists');
+//     }
+//     const messages = await redis.xreadgroup(
+//       'GROUP',
+//       groupName,
+//       consumerName,     // Block indefinitely until a message is available
+//       'COUNT',
+//       10,     
+//       'BLOCK',
+//       0,    // Read one message at a time
+//       'STREAMS',
+//       streamKey,
+//       '>'
+//     ) as RedisStream[]; // 
+//     if (messages) {
+//       for(const [stream, messageList] of messages){
+//           for(const [id,field] of messageList){
+//             if(field[1]){
+//             try {
+//               const zapRunDetails = await prismaClient.zapRun.findFirst({
+//                 where:{
+//                   id:field[1]
+//                 },
+//                 include:{
+//                   zap:{
+//                     include:{
+//                       actions:{
+//                         include:{
+//                           AvailableAction:true
+//                         }
+//                       }
+//                     }
+//                   }
+//                 }
+//               })
+//               const currentAction = zapRunDetails?.zap.actions.find( x => x.sortingOrder === Number(field[3]))
+//               const zapRunMetadata= zapRunDetails?.metadata;
+//               if(currentAction?.AvailableAction.id === "gmail"){
+//                 try {
+//                   const from = parser((currentAction.metadata as JsonObject)?.from as string,zapRunMetadata)
+//                   const to = parser((currentAction.metadata as JsonObject)?.to as string,zapRunMetadata)
+//                   const subject = parser((currentAction.metadata as JsonObject)?.subject as string,zapRunMetadata)
+//                   const body = parser((currentAction.metadata as JsonObject)?.body as string,zapRunMetadata)
+//                   const res = await sendGmail(from,to,subject,body)
+//                   if(res){
+//                     console.log(`Gmail send successfully`)
+//                   }else{
+//                     console.log('failed to send gmail')
+//                   }
+//                 } catch (error) {
+//                   console.log(error)
+//                 }
+//               }
+//               const lastStage = (zapRunDetails?.zap.actions.length || 1)-1;
+//                 if(lastStage !== Number(field[3])){
+//                const res= await redis.xadd(streamKey,"*", 'zapRunId',(field[1]).toString(),'stage',(Number(field[3])+1).toString());
+//                   console.log(`stage ${Number(field[3]+1)} is added.`,res)
+//                 }
+//                 else{
+//                   console.log(`stage ${field[3]} is the last action`)
+//                 }
+//             } catch (error) {
+//               console.log(error)
+//             }
+//           }
+//           await redis.xack(streamKey, groupName,id);
+//           }
+//         }
+//       }
+//   }
+//   main();
 const client_1 = require("@prisma/client");
-const kafkajs_1 = require("kafkajs");
+const ioredis_1 = __importDefault(require("ioredis"));
 const parser_1 = require("./parser");
-const gmail_1 = require("./gmail");
-const TOPIC = "zap-events";
-const kafka = new kafkajs_1.Kafka({
-    clientId: 'Outbox-processor',
-    brokers: ['localhost:9092']
-});
+const gmail_1 = require("./gmail"); // Assume this is your Gmail sending function
 const prismaClient = new client_1.PrismaClient();
-function main() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const consumer = kafka.consumer({ groupId: 'main-worker' });
-        yield consumer.connect();
-        yield consumer.subscribe({ topic: TOPIC, fromBeginning: true });
-        const producer = kafka.producer();
-        yield producer.connect();
-        yield consumer.run({
-            autoCommit: false,
-            eachMessage: (_a) => __awaiter(this, [_a], void 0, function* ({ topic, partition, message }) {
-                var _b, _c, _d, _e;
-                if (message.value === null) {
-                    console.log("message.value is null");
-                    return;
-                }
-                console.log({
-                    partition,
-                    offset: message.offset,
-                    value: message === null || message === void 0 ? void 0 : message.value.toString(),
-                });
-                console.log("here in worker");
-                const parsedData = JSON.parse(message === null || message === void 0 ? void 0 : message.value.toString());
-                const zapRunId = parsedData.zapRunId;
-                const stage = parsedData.stage;
-                const zapRunDetails = yield prismaClient.zapRun.findFirst({
-                    where: {
-                        id: zapRunId
-                    },
+// Initialize Redis
+const redis = new ioredis_1.default({
+    host: 'redis-18656.c321.us-east-1-2.ec2.redns.redis-cloud.com', // Replace with your Redis host
+    port: 18656, // Default Redis port
+    password: 'LEKR3q6SCkNxgjPa6adjScmBb44qrjeu', // Add Redis password if necessary
+});
+const streamKey = "zap-stream"; // Redis stream key
+const groupName = "zap-consumers"; // Consumer group name
+const consumerName = 'consumer-1'; // Consumer name
+// Create or ensure consumer group exists
+async function ensureConsumerGroup() {
+    try {
+        await redis.xgroup('CREATE', streamKey, groupName, '$', 'MKSTREAM');
+    }
+    catch (e) {
+        console.log('Consumer group already exists');
+    }
+}
+// Process the current stage of the task
+async function processStage(zapRunId, currentStage) {
+    try {
+        // Fetch zapRun and related details from the database
+        const zapRunDetails = await prismaClient.zapRun.findFirst({
+            where: { id: zapRunId },
+            include: {
+                zap: {
                     include: {
-                        zap: {
+                        actions: {
                             include: {
-                                actions: {
-                                    include: {
-                                        AvailableAction: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-                // finding action to perform on corressponding stage
-                const currentAction = zapRunDetails === null || zapRunDetails === void 0 ? void 0 : zapRunDetails.zap.actions.find(x => x.sortingOrder === stage);
-                const zapRunMetadata = zapRunDetails === null || zapRunDetails === void 0 ? void 0 : zapRunDetails.metadata;
-                if ((currentAction === null || currentAction === void 0 ? void 0 : currentAction.AvailableAction.id) === "gmail") {
-                    try {
-                        const from = (0, parser_1.parser)((_b = currentAction.metadata) === null || _b === void 0 ? void 0 : _b.from, zapRunMetadata);
-                        const to = (0, parser_1.parser)((_c = currentAction.metadata) === null || _c === void 0 ? void 0 : _c.to, zapRunMetadata);
-                        const body = (0, parser_1.parser)((_d = currentAction.metadata) === null || _d === void 0 ? void 0 : _d.body, zapRunMetadata);
-                        const subject = (0, parser_1.parser)((_e = currentAction.metadata) === null || _e === void 0 ? void 0 : _e.subject, zapRunDetails);
-                        const res = yield (0, gmail_1.sendGmail)(from, to, body, subject);
-                        if (res) {
-                            console.log(`Sending out email from ${from} to ${to} and body is ${body}`);
-                        }
-                        else {
-                            console.log("failed to send gmail");
-                        }
-                    }
-                    catch (error) {
-                        console.log("error", error);
-                    }
-                }
-                //checking if this is last stage or not
-                const lastStage = ((zapRunDetails === null || zapRunDetails === void 0 ? void 0 : zapRunDetails.zap.actions.length) || 1) - 1;
-                if (lastStage !== stage) {
-                    yield producer.send({
-                        topic: TOPIC,
-                        messages: [{ value: JSON.stringify({ zapRunId: zapRunId, stage: stage + 1 }) }]
-                    });
-                }
-                yield new Promise(r => setTimeout(r, 5000));
-                console.log("processing done");
-                yield consumer.commitOffsets([{
-                        topic: TOPIC,
-                        partition,
-                        offset: (parseInt(message.offset) + 1).toString()
-                    }]);
-            }),
+                                AvailableAction: true,
+                            },
+                        },
+                    },
+                },
+            },
         });
-    });
+        if (!zapRunDetails) {
+            console.log(`No zapRun found with id ${zapRunId}`);
+            return;
+        }
+        const currentAction = zapRunDetails.zap.actions.find((x) => x.sortingOrder === currentStage);
+        const zapRunMetadata = zapRunDetails.metadata;
+        if (currentAction?.AvailableAction.id === "gmail") {
+            // Process Gmail action
+            const from = (0, parser_1.parser)(currentAction.metadata?.from, zapRunMetadata);
+            const to = (0, parser_1.parser)(currentAction.metadata?.to, zapRunMetadata);
+            const subject = (0, parser_1.parser)(currentAction.metadata?.subject, zapRunMetadata);
+            const body = (0, parser_1.parser)(currentAction.metadata?.body, zapRunMetadata);
+            const result = await (0, gmail_1.sendGmail)(from, to, subject, body);
+            if (result) {
+                console.log("Gmail sent successfully");
+            }
+            else {
+                console.log("Failed to send Gmail");
+            }
+        }
+        // Check if this is the last stage
+        const lastStage = zapRunDetails.zap.actions.length - 1;
+        if (currentStage < lastStage) {
+            // Push the next stage to the stream
+            await redis.xadd(streamKey, "*", "zapRunId", zapRunId, "stage", (currentStage + 1).toString());
+            console.log(`Stage ${currentStage + 1} added to stream for zapRunId ${zapRunId}`);
+        }
+        else {
+            console.log(`Stage ${currentStage} is the last stage for zapRunId ${zapRunId}`);
+        }
+    }
+    catch (error) {
+        console.log(`Error processing stage ${currentStage} for zapRunId ${zapRunId}:`, error);
+    }
+}
+// Main worker function to process tasks from the stream
+async function main() {
+    await ensureConsumerGroup();
+    while (true) {
+        const messages = await redis.xreadgroup('GROUP', groupName, consumerName, 'COUNT', 1, // Process one message at a time
+        'BLOCK', 0, // Block indefinitely until a message is available
+        'STREAMS', streamKey, '>'); // [stream, [id, fields][]] format
+        if (messages) {
+            for (const [stream, messageList] of messages) {
+                for (const [id, fields] of messageList) {
+                    const zapRunId = fields[1];
+                    const currentStage = parseInt(fields[3], 10);
+                    console.log(`Processing zapRunId: ${zapRunId}, stage: ${currentStage}`);
+                    // Process the current stage
+                    await processStage(zapRunId, currentStage);
+                    // Acknowledge the message after processing
+                    await redis.xack(streamKey, groupName, id);
+                }
+            }
+        }
+    }
 }
 main();

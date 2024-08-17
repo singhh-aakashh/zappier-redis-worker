@@ -15,7 +15,9 @@ function parser(text, values, startDelimeter = "{", endDelimeter = "}") {
             // 
             let stringHoldingValue = text.slice(startIndex + 1, endPoint);
             const keys = stringHoldingValue.split(".");
-            let localValues = Object.assign({}, values);
+            let localValues = {
+                ...values
+            };
             //this will drill the json object and get the actual value
             for (let i = 0; i < keys.length; i++) {
                 if (typeof localValues === "string") {
